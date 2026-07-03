@@ -4,11 +4,10 @@ WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY main.go main.go
-COPY configuration configuration
-COPY serviceaccount serviceaccount
+COPY cmd cmd
+COPY internal internal
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o target/service-account-producer-sidecar .
+RUN CGO_ENABLED=0 GOOS=linux go build -o target/service-account-producer-sidecar ./cmd/service-account-producer-sidecar
 
 FROM registry.cloudogu.com/official/base:3.23.3-5
 LABEL maintainer="hello@cloudogu.com" \

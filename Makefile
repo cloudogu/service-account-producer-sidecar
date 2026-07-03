@@ -6,11 +6,14 @@ IMAGE_NAME=registry.cloudogu.com/k8s/${ARTIFACT_ID}
 
 GOTAG=1.26.4
 LINT_VERSION=v2.9.0
+GO_MAIN_PACKAGE=./cmd/${ARTIFACT_ID}
 
 .DEFAULT_GOAL:=build
 
 include build/make/variables.mk
 include build/make/dependencies-gomod.mk
+# main package moved to cmd/; override build.mk's default (which builds ".") to point at it.
+GO_BUILD_FLAGS=-mod=vendor -a -tags netgo $(LDFLAGS) -installsuffix cgo -o $(BINARY) $(GO_MAIN_PACKAGE)
 include build/make/build.mk
 include build/make/test-common.mk
 include build/make/test-unit.mk
