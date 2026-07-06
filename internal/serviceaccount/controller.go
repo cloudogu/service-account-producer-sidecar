@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sort"
 )
 
 // manager fulfills service-account requests. HookRunner is the production implementation.
@@ -36,25 +37,30 @@ type createOrUpdateRequest struct {
 func (ctrl *Controller) CreateOrUpdate(w http.ResponseWriter, r *http.Request) {
 	var request createOrUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		slog.Warn("rejecting create-or-update request: invalid JSON body", "err", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	if request.Consumer == "" {
+		slog.Warn("rejecting create-or-update request: consumer must not be empty")
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "consumer must not be empty"})
 		return
 	}
 
 	credentials, err := ctrl.manager.CreateOrUpdate(r.Context(), request.Consumer, request.Params)
 	if err != nil {
-		slog.Error("create-or-update hook failed", "consumer", request.Consumer, "err", err)
+		slog.Error("create-or-update hook failed", "consumer", request.Consumer, "params", request.Params, "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	if len(credentials) == 0 {
+		slog.Info("service account created/updated, hook returned no credentials", "consumer", request.Consumer)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
+	slog.Info("service account created/updated", "consumer", request.Consumer, "credentialKeys", sortedKeys(credentials))
 	writeJSON(w, http.StatusCreated, credentials)
 }
 
@@ -62,6 +68,7 @@ func (ctrl *Controller) CreateOrUpdate(w http.ResponseWriter, r *http.Request) {
 func (ctrl *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 	consumer := r.PathValue("consumer")
 	if consumer == "" {
+		slog.Warn("rejecting delete request: consumer must not be empty")
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "consumer must not be empty"})
 		return
 	}
@@ -71,6 +78,8 @@ func (ctrl *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+
+	slog.Info("service account deleted", "consumer", consumer)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -79,6 +88,7 @@ func (ctrl *Controller) Delete(w http.ResponseWriter, r *http.Request) {
 func (ctrl *Controller) Exists(w http.ResponseWriter, r *http.Request) {
 	consumer := r.PathValue("consumer")
 	if consumer == "" {
+		slog.Warn("rejecting exists request: consumer must not be empty")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -89,6 +99,7 @@ func (ctrl *Controller) Exists(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	slog.Debug("checked service account existence", "consumer", consumer, "exists", exists)
 
 	if !exists {
 		w.WriteHeader(http.StatusNotFound)
@@ -107,4 +118,13 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

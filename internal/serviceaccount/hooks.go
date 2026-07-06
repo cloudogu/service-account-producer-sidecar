@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"sort"
 	"strings"
@@ -64,20 +65,30 @@ func (h *HookRunner) run(ctx context.Context, hook string, consumer string, para
 	defer cancel()
 
 	args := append(append([]string{}, params...), consumer)
+	slog.Debug("invoking hook", "hook", hook, "consumer", consumer, "params", params)
+
 	cmd := exec.CommandContext(ctx, hook, args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
+			slog.Debug("hook exited with an error", "hook", hook, "consumer", consumer, "duration", duration, "exitCode", exitErr.ExitCode())
 			return "", exitErr.ExitCode(), fmt.Errorf("hook %q failed: %w (stderr: %s)", hook, err, strings.TrimSpace(stderr.String()))
 		}
+
+		slog.Debug("hook failed to run", "hook", hook, "consumer", consumer, "duration", duration, "err", err)
 		return "", -1, fmt.Errorf("hook %q failed: %w (stderr: %s)", hook, err, strings.TrimSpace(stderr.String()))
 	}
 
+	slog.Debug("hook completed successfully", "hook", hook, "consumer", consumer, "duration", duration)
 	return stdout.String(), 0, nil
 }
 

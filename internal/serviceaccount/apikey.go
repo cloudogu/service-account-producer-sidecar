@@ -2,6 +2,7 @@ package serviceaccount
 
 import (
 	"crypto/subtle"
+	"log/slog"
 	"net/http"
 )
 
@@ -14,6 +15,8 @@ func ValidateAPIKey(apiKey string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actual := []byte(r.Header.Get(apiKeyHeader))
 		if subtle.ConstantTimeCompare(expected, actual) != 1 {
+			slog.Warn("rejected request with invalid or missing API key",
+				"method", r.Method, "path", r.URL.Path, "remoteAddr", r.RemoteAddr)
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or missing " + apiKeyHeader})
 			return
 		}

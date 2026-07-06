@@ -35,6 +35,19 @@ func TestValidateAPIKey(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
+	t.Run("logs a warning on rejection without leaking the presented key", func(t *testing.T) {
+		logs := captureLogs(t)
+		h := newHandler()
+		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set(apiKeyHeader, "wrong-key")
+		w := httptest.NewRecorder()
+
+		h.ServeHTTP(w, req)
+
+		assert.Contains(t, logs.String(), "rejected request with invalid or missing API key")
+		assert.NotContains(t, logs.String(), "wrong-key")
+	})
+
 	t.Run("accepts matching key", func(t *testing.T) {
 		h := newHandler()
 		req := httptest.NewRequest(http.MethodGet, "/protected", nil)

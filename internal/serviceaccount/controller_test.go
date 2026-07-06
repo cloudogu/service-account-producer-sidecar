@@ -57,6 +57,7 @@ func TestController_CreateOrUpdate(t *testing.T) {
 	})
 
 	t.Run("returns 500 when hook fails", func(t *testing.T) {
+		logs := captureLogs(t)
 		ctrl := NewController(&stubManager{
 			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
 				return nil, errors.New("boom")
@@ -67,9 +68,13 @@ func TestController_CreateOrUpdate(t *testing.T) {
 		ctrl.CreateOrUpdate(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, logs.String(), "create-or-update hook failed")
+		assert.Contains(t, logs.String(), "jenkins")
+		assert.Contains(t, logs.String(), "boom")
 	})
 
 	t.Run("returns 201 with credentials on success", func(t *testing.T) {
+		logs := captureLogs(t)
 		var gotConsumer string
 		var gotParams map[string]string
 		ctrl := NewController(&stubManager{
@@ -92,9 +97,16 @@ func TestController_CreateOrUpdate(t *testing.T) {
 		var body map[string]string
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		assert.Equal(t, map[string]string{"username": "u", "password": "p"}, body)
+
+		// Logged action must name the consumer and which fields were returned, but never the
+		// credential values themselves (e.g. the password "p" must not leak into the logs).
+		assert.Contains(t, logs.String(), "service account created/updated")
+		assert.Contains(t, logs.String(), "jenkins")
+		assert.NotContains(t, logs.String(), "\"p\"")
 	})
 
 	t.Run("returns 204 when hook produces no credentials", func(t *testing.T) {
+		logs := captureLogs(t)
 		ctrl := NewController(&stubManager{
 			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
 				return map[string]string{}, nil
@@ -105,6 +117,7 @@ func TestController_CreateOrUpdate(t *testing.T) {
 		ctrl.CreateOrUpdate(w, req)
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Contains(t, logs.String(), "hook returned no credentials")
 	})
 }
 
@@ -122,6 +135,7 @@ func TestController_Delete(t *testing.T) {
 	})
 
 	t.Run("returns 204 on success", func(t *testing.T) {
+		logs := captureLogs(t)
 		var gotConsumer string
 		ctrl := NewController(&stubManager{
 			deleteFunc: func(ctx context.Context, consumer string) error {
@@ -136,6 +150,8 @@ func TestController_Delete(t *testing.T) {
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
 		assert.Equal(t, "jenkins", gotConsumer)
+		assert.Contains(t, logs.String(), "service account deleted")
+		assert.Contains(t, logs.String(), "jenkins")
 	})
 }
 
@@ -165,6 +181,7 @@ func TestController_Exists(t *testing.T) {
 	})
 
 	t.Run("returns 500 when the hook fails", func(t *testing.T) {
+		logs := captureLogs(t)
 		ctrl := NewController(&stubManager{
 			existsFunc: func(ctx context.Context, consumer string) (bool, error) { return false, errors.New("boom") },
 		})
@@ -174,6 +191,9 @@ func TestController_Exists(t *testing.T) {
 		ctrl.Exists(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, logs.String(), "exists hook failed")
+		assert.Contains(t, logs.String(), "jenkins")
+		assert.Contains(t, logs.String(), "boom")
 	})
 }
 
