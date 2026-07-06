@@ -28,7 +28,7 @@ echo "password: s3cr3t"
 `)
 		runner := &HookRunner{CreateHook: script, Timeout: time.Second}
 
-		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil)
+		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil, nil)
 
 		require.NoError(t, err)
 		assert.Equal(t, map[string]string{
@@ -46,10 +46,25 @@ echo "args: $*"
 		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins", map[string]string{
 			"permissions":          "nx-readonly",
 			"fullAccessRepository": "foo",
-		})
+		}, nil)
 
 		require.NoError(t, err)
 		assert.Equal(t, "--fullAccessRepository=foo --permissions=nx-readonly jenkins", credentials["args"])
+	})
+
+	t.Run("passes behaviorParams as named --behavior-key=value flags, distinct from domain params", func(t *testing.T) {
+		script := writeScript(t, `#!/bin/sh
+echo "args: $*"
+`)
+		runner := &HookRunner{CreateHook: script, Timeout: time.Second}
+
+		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins",
+			map[string]string{"permissions": "nx-readonly"},
+			map[string]any{"rotateServiceAccountNow": true},
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "--permissions=nx-readonly --behavior-rotateServiceAccountNow=true jenkins", credentials["args"])
 	})
 
 	t.Run("returns empty credentials when hook prints nothing parseable", func(t *testing.T) {
@@ -58,7 +73,7 @@ exit 0
 `)
 		runner := &HookRunner{CreateHook: script, Timeout: time.Second}
 
-		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil)
+		credentials, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil, nil)
 
 		require.NoError(t, err)
 		assert.Empty(t, credentials)
@@ -71,7 +86,7 @@ exit 1
 `)
 		runner := &HookRunner{CreateHook: script, Timeout: time.Second}
 
-		_, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil)
+		_, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil, nil)
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "boom")
@@ -83,7 +98,7 @@ sleep 5
 `)
 		runner := &HookRunner{CreateHook: script, Timeout: 10 * time.Millisecond}
 
-		_, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil)
+		_, err := runner.CreateOrUpdate(context.Background(), "jenkins", nil, nil)
 
 		require.Error(t, err)
 	})

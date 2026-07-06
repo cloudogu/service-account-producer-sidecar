@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,9 +29,12 @@ type HookRunner struct {
 	Timeout    time.Duration
 }
 
-// CreateOrUpdate runs the configured create hook for the given consumer and params.
-func (h *HookRunner) CreateOrUpdate(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
-	stdout, _, err := h.run(ctx, h.CreateHook, consumer, paramsToFlags(params))
+// CreateOrUpdate runs the configured create hook for the given consumer, params and behaviorParams.
+// behaviorParams (e.g. rotateServiceAccountNow) are passed as "--behavior-key=value" flags,
+// distinct from the "--key=value" domain params, so a hook can tell the two apart.
+func (h *HookRunner) CreateOrUpdate(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
+	flags := append(paramsToFlags(params), behaviorParamsToFlags(behaviorParams)...)
+	stdout, _, err := h.run(ctx, h.CreateHook, consumer, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +110,40 @@ func paramsToFlags(params map[string]string) []string {
 	}
 
 	return flags
+}
+
+// behaviorParamsToFlags turns a behaviorParams map into named "--behavior-key=value" flags, sorted
+// by key. The "behavior-" prefix keeps these distinguishable from domain params on the hook's
+// command line, since the two maps are unrelated and may otherwise collide on key names.
+func behaviorParamsToFlags(behaviorParams map[string]any) []string {
+	keys := make([]string, 0, len(behaviorParams))
+	for k := range behaviorParams {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	flags := make([]string, 0, len(behaviorParams))
+	for _, k := range keys {
+		flags = append(flags, "--behavior-"+k+"="+stringifyBehaviorValue(behaviorParams[k]))
+	}
+
+	return flags
+}
+
+// stringifyBehaviorValue renders a decoded JSON value as a hook-CLI-friendly string.
+func stringifyBehaviorValue(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return val
+	case bool:
+		return strconv.FormatBool(val)
+	case float64: // encoding/json decodes all JSON numbers into float64 when the target is `any`.
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 func parseCredentials(output string) map[string]string {

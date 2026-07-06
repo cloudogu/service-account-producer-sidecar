@@ -13,7 +13,7 @@ import (
 
 func TestCreateServer(t *testing.T) {
 	stub := &stubManager{
-		createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
+		createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
 			return map[string]string{"username": "u"}, nil
 		},
 		deleteFunc: func(ctx context.Context, consumer string) error { return nil },

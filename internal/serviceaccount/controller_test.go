@@ -14,13 +14,13 @@ import (
 )
 
 type stubManager struct {
-	createOrUpdateFunc func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error)
+	createOrUpdateFunc func(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error)
 	deleteFunc         func(ctx context.Context, consumer string) error
 	existsFunc         func(ctx context.Context, consumer string) (bool, error)
 }
 
-func (s *stubManager) CreateOrUpdate(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
-	return s.createOrUpdateFunc(ctx, consumer, params)
+func (s *stubManager) CreateOrUpdate(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
+	return s.createOrUpdateFunc(ctx, consumer, params, behaviorParams)
 }
 
 func (s *stubManager) Delete(ctx context.Context, consumer string) error {
@@ -59,7 +59,7 @@ func TestController_CreateOrUpdate(t *testing.T) {
 	t.Run("returns 500 when hook fails", func(t *testing.T) {
 		logs := captureLogs(t)
 		ctrl := NewController(&stubManager{
-			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
+			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
 				return nil, errors.New("boom")
 			},
 		})
@@ -77,20 +77,26 @@ func TestController_CreateOrUpdate(t *testing.T) {
 		logs := captureLogs(t)
 		var gotConsumer string
 		var gotParams map[string]string
+		var gotBehaviorParams map[string]any
 		ctrl := NewController(&stubManager{
-			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
+			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
 				gotConsumer = consumer
 				gotParams = params
+				gotBehaviorParams = behaviorParams
 				return map[string]string{"username": "u", "password": "p"}, nil
 			},
 		})
-		req, w := newTestRequest(http.MethodPut, "/serviceaccounts/", `{"consumer":"jenkins","params":{"permissions":"nx-readonly"}}`)
+		req, w := newTestRequest(http.MethodPut, "/serviceaccounts/",
+			`{"consumer":"jenkins","params":{"permissions":"nx-readonly"},"behaviorParams":{"rotateServiceAccountNow":true}}`)
 
 		ctrl.CreateOrUpdate(w, req)
 
 		require.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, "jenkins", gotConsumer)
 		assert.Equal(t, map[string]string{"permissions": "nx-readonly"}, gotParams)
+		// behaviorParams decodes into map[string]any (not map[string]string) because the operator
+		// sends non-string values, e.g. rotateServiceAccountNow as a JSON bool.
+		assert.Equal(t, map[string]any{"rotateServiceAccountNow": true}, gotBehaviorParams)
 
 		// The operator's HTTP client decodes the response body directly into map[string]string -
 		// no "credentials" wrapper object.
@@ -108,7 +114,7 @@ func TestController_CreateOrUpdate(t *testing.T) {
 	t.Run("returns 204 when hook produces no credentials", func(t *testing.T) {
 		logs := captureLogs(t)
 		ctrl := NewController(&stubManager{
-			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string) (map[string]string, error) {
+			createOrUpdateFunc: func(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error) {
 				return map[string]string{}, nil
 			},
 		})

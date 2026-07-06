@@ -10,7 +10,7 @@ import (
 
 // manager fulfills service-account requests. HookRunner is the production implementation.
 type manager interface {
-	CreateOrUpdate(ctx context.Context, consumer string, params map[string]string) (map[string]string, error)
+	CreateOrUpdate(ctx context.Context, consumer string, params map[string]string, behaviorParams map[string]any) (map[string]string, error)
 	Delete(ctx context.Context, consumer string) error
 	Exists(ctx context.Context, consumer string) (bool, error)
 }
@@ -29,6 +29,8 @@ func NewController(manager manager) *Controller {
 type createOrUpdateRequest struct {
 	Consumer string            `json:"consumer"`
 	Params   map[string]string `json:"params"`
+	// BehaviorParams carries the operator's producer.BehaviorParams (e.g. rotateServiceAccountNow).
+	BehaviorParams map[string]any `json:"behaviorParams"`
 }
 
 // CreateOrUpdate handles PUT /serviceaccounts. On success it returns 201 with the credentials
@@ -47,20 +49,23 @@ func (ctrl *Controller) CreateOrUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	credentials, err := ctrl.manager.CreateOrUpdate(r.Context(), request.Consumer, request.Params)
+	credentials, err := ctrl.manager.CreateOrUpdate(r.Context(), request.Consumer, request.Params, request.BehaviorParams)
 	if err != nil {
-		slog.Error("create-or-update hook failed", "consumer", request.Consumer, "params", request.Params, "err", err)
+		slog.Error("create-or-update hook failed",
+			"consumer", request.Consumer, "params", request.Params, "behaviorParams", request.BehaviorParams, "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	if len(credentials) == 0 {
-		slog.Info("service account created/updated, hook returned no credentials", "consumer", request.Consumer)
+		slog.Info("service account created/updated, hook returned no credentials",
+			"consumer", request.Consumer, "behaviorParams", request.BehaviorParams)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	slog.Info("service account created/updated", "consumer", request.Consumer, "credentialKeys", sortedKeys(credentials))
+	slog.Info("service account created/updated",
+		"consumer", request.Consumer, "behaviorParams", request.BehaviorParams, "credentialKeys", sortedKeys(credentials))
 	writeJSON(w, http.StatusCreated, credentials)
 }
 

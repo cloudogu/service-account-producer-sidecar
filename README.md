@@ -34,6 +34,7 @@ A hook is any executable file. It is invoked as:
 ```
 
 - `--param=value...` are the entries of the request's `params` object (`map[string]string`, matching the operator's HTTP client), passed as named long-flags, sorted by key for deterministic invocations (e.g. `--fullAccessRepository=foo --permissions=nx-readonly`). `EXISTS_HOOK` never receives params, only the consumer.
+- `CREATE_HOOK` additionally receives the request's `behaviorParams` object (the operator's `producer.BehaviorParams`, e.g. `rotateServiceAccountNow`) as `--behavior-key=value` flags, appended after the domain param flags and sorted by key the same way - e.g. `--permissions=nx-readonly --behavior-rotateServiceAccountNow=true`.
 - `<consumer>` is always the last, unnamed argument.
 - The sidecar itself has no opinion on what a hook does with these flags - it is deliberately kept free of any assumptions about a specific Dogu script's own CLI convention. If the underlying script expects a different shape (e.g. Nexus's `create-sa.sh`/`remove-sa.sh` expect bare positional `key=value` parameters, no `--`), the hook is expected to be a small wrapper that translates `--key=value` into whatever the real script needs, so that script doesn't have to change.
 
