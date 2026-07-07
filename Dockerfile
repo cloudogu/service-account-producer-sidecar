@@ -9,7 +9,7 @@ COPY internal internal
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o target/service-account-producer-sidecar ./cmd/service-account-producer-sidecar
 
-FROM registry.cloudogu.com/official/base:3.23.3-5
+FROM alpine:3.24.1
 LABEL maintainer="hello@cloudogu.com" \
     NAME="k8s/service-account-producer-sidecar" \
     VERSION="0.1.0"

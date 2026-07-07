@@ -14,9 +14,9 @@ Die vollständige HTTP-API- und Hook-Referenz steht im [README](../../README.md)
 
 ## 1. Hook-Skripte im Sidecar-Container bereitstellen
 
-Das Sidecar-Image ist generisch und enthält kein anwendungsspezifisches Tooling. Die Skripte, die
-Create/Delete/Exists implementieren, über einen Init-Container aus dem eigenen Anwendungs-Image in
-ein mit dem Sidecar geteiltes Volume kopieren:
+Das Sidecar-Image ist ein einfaches Alpine und enthält kein anwendungsspezifisches Tooling. Die
+Skripte, die Create/Delete/Exists implementieren, über einen Init-Container aus dem eigenen
+Anwendungs-Image in ein mit dem Sidecar geteiltes Volume kopieren:
 
 ```yaml
 initContainers:
@@ -35,6 +35,13 @@ containers:
 volumes:
   - name: sa-manager-hooks
     emptyDir: {}
+```
+
+Falls die Hook-Skripte `doguctl` aufrufen (wie die meisten Cloudogu-Dogu-Hook-Skripte), dieses
+Binary genauso aus dem Anwendungs-Image mitkopieren — das Sidecar-Image stellt es nicht bereit:
+
+```yaml
+command: ["sh", "-c", "cp /usr/local/bin/doguctl /create-sa.sh /remove-sa.sh /hooks-src/*.sh /shared/ && chmod 0555 /shared/*"]
 ```
 
 ## 2. Sidecar-Container konfigurieren
@@ -59,6 +66,10 @@ volumes:
           key: apiKey
     - name: LOG_LEVEL
       value: INFO
+    # Nur nötig, wenn ein Hook-Skript ein nach /hooks kopiertes Binary (z. B. doguctl) über einen
+    # bloßen Kommandonamen statt absoluten Pfad aufruft - erweitert den Standard-Alpine-PATH.
+    - name: PATH
+      value: "/hooks:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   volumeMounts:
     - name: sa-manager-hooks
       mountPath: /hooks

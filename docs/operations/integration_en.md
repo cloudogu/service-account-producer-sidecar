@@ -14,7 +14,7 @@ component's Helm chart, so it can act as a `ServiceAccountProducer` for the
 
 ## 1. Provide the hook scripts in the sidecar container
 
-The sidecar image is generic and does not contain any application-specific tooling. Copy the
+The sidecar image is plain Alpine and does not contain any application-specific tooling. Copy the
 scripts that implement create/delete/exists into a volume shared with the sidecar, using an init
 container based on the application's own image:
 
@@ -35,6 +35,13 @@ containers:
 volumes:
   - name: sa-manager-hooks
     emptyDir: {}
+```
+
+If the hook scripts call `doguctl` (as most Cloudogu Dogu hook scripts do), copy that binary in
+from the application image the same way - the sidecar image does not provide it:
+
+```yaml
+command: ["sh", "-c", "cp /usr/local/bin/doguctl /create-sa.sh /remove-sa.sh /hooks-src/*.sh /shared/ && chmod 0555 /shared/*"]
 ```
 
 ## 2. Configure the sidecar container
@@ -59,6 +66,10 @@ volumes:
           key: apiKey
     - name: LOG_LEVEL
       value: INFO
+    # Only needed if a hook script calls a binary copied into /hooks (e.g. doguctl) via a bare
+    # command name rather than an absolute path - extends the default Alpine PATH.
+    - name: PATH
+      value: "/hooks:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   volumeMounts:
     - name: sa-manager-hooks
       mountPath: /hooks
