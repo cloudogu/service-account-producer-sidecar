@@ -24,7 +24,7 @@ node('docker') {
                 .mountJenkinsUser()
                 .inside("--volume ${WORKSPACE}:/workdir -w /workdir") {
                     stage('Build') {
-                        make 'compile-ci'
+                        make 'vendor compile-ci'
                     }
 
                     stage('Unit Tests') {
