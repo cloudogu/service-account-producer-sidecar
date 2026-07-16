@@ -1,6 +1,25 @@
 # service-account-producer-sidecar
 
-A generic sidecar that implements the [Cloudogu service-account-operator](https://github.com/cloudogu/service-account-operator) HTTP `ServiceAccountProducer` API (`PUT /serviceaccounts/`, `DELETE /serviceaccounts/{consumer}`) by executing configurable shell-script hooks.
+A generic sidecar that implements the HTTP API expected by the [Cloudogu service-account-operator](https://github.com/cloudogu/service-account-operator)'s producer client (`internal/producer/http_client.go`) by executing configurable shell-script hooks:
+
+| Method       | Path                          | Auth required? | Purpose                                |
+|--------------|-------------------------------|----------------|----------------------------------------|
+| `PUT`        | `/serviceaccounts`            | yes            | Create or update a service account     |
+| `DELETE`     | `/serviceaccounts/{consumer}` | yes            | Remove a service account               |
+| `HEAD`       | `/serviceaccounts/{consumer}` | yes            | Check whether a service account exists |
+| `GET`/`HEAD` | `/serviceaccounts`            | no             | Readiness check                        |
+
+It carries no Dogu-specific logic itself: the hook scripts that actually create/delete/lookup a service account (e.g. calling a Dogu's REST API, reading/writing config via `doguctl`, ...) are supplied by the consuming Dogu/component.
+
+### Where do I find the configuration and hook contract reference?
+
+- [Konfiguration und Hook-Contract](docs/operations/hooks_de.md)
+- [Configuration and hook contract](docs/operations/hooks_en.md)
+
+### Where do I find the integration guide?
+
+- [Service-Account-Producer-Sidecar einbinden](docs/operations/integration_de.md)
+- [Integrate the service-account-producer-sidecar](docs/operations/integration_en.md)
 
 ---
 ## What is the Cloudogu EcoSystem?
